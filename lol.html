@@ -1,0 +1,129 @@
+<!-- 
+		Name: Dayla Crabtree
+		Date: 5-7-16
+		Class: CSCI2447, Javascript Fundamentals
+		Project 7
+ -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <base href = "https://cdn.jsdelivr.net/gh/entraptadoeztech/invader-zim@master/project7/">
+    <title>Destroy all Zims (CSCI2447)</title>
+    
+	<link href="css/game.css" rel="stylesheet" />
+    <script src="js/jquery-1.12.0.min.js"></script>
+	<script src="js/jquery-ui.min.js"></script>	
+	<script async src="//assets.codepen.io/assets/embed/ei.js"></script>
+	<script>
+		var score = 0;
+		var seconds = 30;
+		var timer;
+		var zim;
+		
+		$(document).ready( function() {
+			$('start_button').button('reset');
+			$('#start_button').click(function() {
+				startGame();
+				$('#start_button').css('opacity', '0.6');
+			});
+			
+			$('#gamespace').on('click','img', function() {
+					$('#score').text(totalScore);
+					$(this).hide( "explode", {pieces: 30 }, 1000 );
+			});
+        });
+		
+        function randomX() {
+			return Math.floor((Math.random() * 430) + 0);
+        }
+
+        function randomY() {
+			return Math.floor((Math.random() * 320) + 0);
+        }
+		
+		function randomZim() {
+			return Math.floor((Math.random() * 3000) + 0);
+		}
+		
+		function randomHide() {
+			return Math.floor((Math.random() * 5000) + 0);
+		}
+		
+		function totalScore() {
+			score += 1;
+			$('#score').html(score + ' points');	
+		}
+		
+		function declineTimer() {
+				if (seconds < 0) {
+					clearTimeout('hideZim();', randomZim());
+					clearTimeout('addZim();', randomHide());
+					$('#gamespace').text('Game Over       Score:' +score+ '');
+					$('#start_button').css('opacity', '1');
+					$('h1').css('color', '#cc0066');
+					document.getElementById('start_button').disabled = false;// The autocomplete = "off" in the button style allows it to be reset after the page is reset in Firefox.
+				} else {
+					$('#timer').html(seconds + ' seconds');
+					$('#timer').fadeIn(1000);
+					timer = setTimeout('declineTimer()', 1000);
+					seconds -= 1; 
+				}	
+		}
+		
+		function startGame() {
+			$('#gamespace').css('background','url(./img/city.jpg)'); //This image was found off the internet.
+			$('h1').css('color', 'red');
+			document.getElementById('start_button').disabled = true;
+			seconds = 30;
+			score = 0;
+			$('#score').html(score + ' points');	
+			declineTimer()
+			addZim();	
+			hideZim();
+			$('#gamespace').text('');
+		}
+		
+		
+		function hideZim() {
+			var zimDisappear = 0;
+			positionX = randomX();
+			positionY = randomY();
+			$('#gamespace').append('<img src="img/invader_zim.png" alt="This image was found off the internet" style="top:'+randomY()+'px;left:'+randomX()+'px;"/>');
+			$('img').hide('fade');
+			zimDisappear--;
+			setTimeout('addZim();', randomHide());
+		}
+		
+		function addZim() {
+			if (seconds < 0) {
+				return;
+			} else {
+				positionX = randomX();
+				positionY = randomY();
+				$('#gamespace').append('<img src="img/invader_zim.png" alt="This image was found off the internet" style="top:'+randomY()+'px;left:'+randomX()+'px;"/>');
+				timer = setTimeout('hideZim();', 2000);
+			}
+			
+		}
+	</script>
+  </head>
+  <body>
+
+	<div id="content">
+
+		<h1>Destroy all Zims</h1>
+		
+		<p>After you start your mission to destroy all imposter Zims you will have 30 seconds to zap them off of earth.</p>
+		
+		<div id="controls">
+			<span id="score">0 </span>
+			<button type="button" id="start_button" autocomplete = "off">Start! </button>
+			
+		</div>
+		
+		<div id="timer"> </div>
+		<div id="gamespace">
+		</div>
+	</div>
+  </body>
+</html>
