@@ -12,8 +12,8 @@
 <script>
 (async () => {
 
-    const FOSS= "https://oldprodigy.onrender.com";
-    const FOSS_BASE = FOSS + "/";
+    const FOSS = "https://oldprodigy.onrender.com";
+    const FOSS_BASE = FOSS.endsWith("/") ? FOSS : FOSS + "/";
 
     /* --------------------------------
        Keep the hosted page at /
@@ -44,7 +44,6 @@
     -------------------------------- */
 
     const nativeFetch = window.fetch.bind(window);
-
     const NativeXHR = window.XMLHttpRequest;
 
 
@@ -53,165 +52,86 @@
     -------------------------------- */
 
     async function curlFetch(url, options = {}) {
-
         const requestURL =
             typeof url === "string"
                 ? url
-                : url.url;
+                : url && url.url
+                    ? url.url
+                    : String(url);
 
-        console.log(
-            "[WISP FETCH]",
-            requestURL
-        );
+        console.log("[WISP FETCH]", requestURL);
 
-        const result =
-            await libcurl.fetch(
-                requestURL,
-                {
-                    method:
-                        options.method || "GET",
+        const result = await libcurl.fetch(requestURL, {
+            method: options.method || "GET",
+            headers: options.headers || {},
+            body: options.body
+        });
 
-                    headers:
-                        options.headers || {},
+        const body = await result.arrayBuffer();
 
-                    body:
-                        options.body
-                }
-            );
-
-        const body =
-            await result.arrayBuffer();
-
-        return new Response(
-            body,
-            {
-                status:
-                    result.status,
-
-                statusText:
-                    result.statusText,
-
-                headers:
-                    result.headers
-            }
-        );
+        return new Response(body, {
+            status: result.status,
+            statusText: result.statusText,
+            headers: result.headers
+        });
     }
 
 
     /* --------------------------------
        Intercept fetch()
-       
-       TikTok API requests go through
-       libcurl/WISP instead of browser
-       CORS.
+
+       FOSS requests go through libcurl/WISP
+       instead of browser CORS.
     -------------------------------- */
 
-    window.fetch = async function(
-        input,
-        options
-    ) {
+    window.fetch = async function(input, options) {
+        let url = typeof input === "string"
+            ? input
+            : input && input.url
+                ? input.url
+                : "";
 
-        let url =
-            typeof input === "string"
-                ? input
-                : input.url;
+        if (!url) {
+            return nativeFetch(input, options);
+        }
 
         try {
+            const parsed = new URL(url, location.href);
 
-            const parsed =
-                new URL(
-                    url,
-                    location.href
-                );
+            const isOnRenderHost =
+                parsed.hostname === "onrender.com" ||
+                parsed.hostname.endsWith(".onrender.com");
 
-            /*
-             * Anything going to TikTok
-             * gets routed through WISP.
-             */
-
-            if (
-                parsed.hostname ===
-                    ".onrender.com" ||
-
-                parsed.hostname.endsWith(
-                    ".onrender.com"
-                ) ||
-
-                parsed.hostname.endsWith(
-                    ".onrender.com"
-                )
-            ) {
-
-                return await curlFetch(
-                    parsed.href,
-                    options || {}
-                );
+            if (isOnRenderHost) {
+                return await curlFetch(parsed.href, options || {});
             }
-
         } catch (_) {}
 
-        return nativeFetch(
-            input,
-            options
-        );
+        return nativeFetch(input, options);
     };
 
 
     /* --------------------------------
-       Intercept XHR too
-       
-       TikTok still uses XHR in some
-       parts of the application.
+       Fetch homepage
     -------------------------------- */
 
-    /*
-     * We don't replace XHR yet because
-     * TikTok expects a very specific
-     * XMLHttpRequest implementation.
-     *
-     * fetch() is the important path shown
-     * in your errors.
-     */
-
-
-    /* --------------------------------
-       Fetch TikTok homepage
-    -------------------------------- */
-
-    const response =
-        await libcurl.fetch(
-            FOSS_BASE
-        );
+    const response = await libcurl.fetch(FOSS_BASE);
 
     if (!response.ok) {
-        throw new Error(
-            "TikTok returned HTTP " +
-            response.status
-        );
+        throw new Error("FOSS returned HTTP " + response.status);
     }
 
-    let html =
-        await response.text();
+    let html = await response.text();
 
-    console.log(
-        "TikTok HTML:",
-        html.length,
-        "bytes"
-    );
+    console.log("FOSS HTML:", html.length, "bytes");
 
 
     /* --------------------------------
        Parse
     -------------------------------- */
 
-    const parser =
-        new DOMParser();
-
-    const doc =
-        parser.parseFromString(
-            html,
-            "text/html"
-        );
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
 
 
     /* --------------------------------
@@ -219,10 +139,7 @@
     -------------------------------- */
 
     function fixURL(value) {
-
-        if (!value) {
-            return value;
-        }
+        if (!value) return value;
 
         value = value.trim();
 
@@ -237,26 +154,16 @@
         }
 
         try {
-
-            if (
-                value.startsWith("//")
-            ) {
+            if (value.startsWith("//")) {
                 return "https:" + value;
             }
 
-            if (
-                value.startsWith("/")
-            ) {
+            if (value.startsWith("/")) {
                 return FOSS + value;
             }
 
-            return new URL(
-                value,
-                FOSS_BASE
-            ).href;
-
+            return new URL(value, FOSS_BASE).href;
         } catch (_) {
-
             return value;
         }
     }
@@ -280,25 +187,10 @@
     ];
 
     for (const attribute of attributes) {
-
-        for (const element of
-            doc.querySelectorAll(
-                "[" + attribute + "]"
-            )) {
-
-            const value =
-                element.getAttribute(
-                    attribute
-                );
-
-            if (!value) {
-                continue;
-            }
-
-            element.setAttribute(
-                attribute,
-                fixURL(value)
-            );
+        for (const element of doc.querySelectorAll("[" + attribute + "]")) {
+            const value = element.getAttribute(attribute);
+            if (!value) continue;
+            element.setAttribute(attribute, fixURL(value));
         }
     }
 
@@ -307,42 +199,21 @@
        srcset
     -------------------------------- */
 
-    for (const element of
-        doc.querySelectorAll("[srcset]")) {
+    for (const element of doc.querySelectorAll("[srcset]")) {
+        const value = element.getAttribute("srcset");
+        if (!value) continue;
 
-        const value =
-            element.getAttribute(
-                "srcset"
-            );
+        const rewritten = value
+            .split(",")
+            .map(item => {
+                const parts = item.trim().split(/\s+/);
+                if (!parts.length) return item;
+                parts[0] = fixURL(parts[0]);
+                return parts.join(" ");
+            })
+            .join(", ");
 
-        if (!value) {
-            continue;
-        }
-
-        const rewritten =
-            value
-                .split(",")
-                .map(item => {
-
-                    const parts =
-                        item.trim()
-                            .split(/\s+/);
-
-                    if (!parts.length) {
-                        return item;
-                    }
-
-                    parts[0] =
-                        fixURL(parts[0]);
-
-                    return parts.join(" ");
-                })
-                .join(", ");
-
-        element.setAttribute(
-            "srcset",
-            rewritten
-        );
+        element.setAttribute("srcset", rewritten);
     }
 
 
@@ -350,35 +221,16 @@
        Inline CSS
     -------------------------------- */
 
-    for (const element of
-        doc.querySelectorAll(
-            "[style]"
-        )) {
+    for (const element of doc.querySelectorAll("[style]")) {
+        let style = element.getAttribute("style");
+        if (!style) continue;
 
-        let style =
-            element.getAttribute(
-                "style"
-            );
-
-        style =
-            style.replace(
-                /url\(\s*(['"]?)([^'")]+)\1\s*\)/gi,
-                (match, quote, url) => {
-
-                    return (
-                        "url(" +
-                        quote +
-                        fixURL(url) +
-                        quote +
-                        ")"
-                    );
-                }
-            );
-
-        element.setAttribute(
-            "style",
-            style
+        style = style.replace(
+            /url\(\s*(['"]?)([^'")]+)\1\s*\)/gi,
+            (match, quote, url) => "url(" + quote + fixURL(url) + quote + ")"
         );
+
+        element.setAttribute("style", style);
     }
 
 
@@ -386,58 +238,22 @@
        Inline JavaScript URLs
     -------------------------------- */
 
-    for (const script of
-        doc.querySelectorAll(
-            "script"
-        )) {
+    for (const script of doc.querySelectorAll("script")) {
+        if (!script.textContent) continue;
 
-        if (!script.textContent) {
-            continue;
-        }
+        let code = script.textContent;
 
-        let code =
-            script.textContent;
+        code = code.replace(
+            /(["'`])\/(?!\/)([^"'`\r\n]*)\1/g,
+            (match, quote, path) => quote + FOSS + "/" + path + quote
+        );
 
-        /*
-         * Root-relative URLs.
-         */
+        code = code.replace(
+            /(["'`])\/\/([^"'`\r\n]+)\1/g,
+            (match, quote, host) => quote + "https://" + host + quote
+        );
 
-        code =
-            code.replace(
-                /(["'`])\/(?!\/)([^"'`\r\n]*)\1/g,
-                (match, quote, path) => {
-
-                    return (
-                        quote +
-                        FOSS +
-                        "/" +
-                        path +
-                        quote
-                    );
-                }
-            );
-
-
-        /*
-         * Protocol-relative URLs.
-         */
-
-        code =
-            code.replace(
-                /(["'`])\/\/([^"'`\r\n]+)\1/g,
-                (match, quote, host) => {
-
-                    return (
-                        quote +
-                        "https://" +
-                        host +
-                        quote
-                    );
-                }
-            );
-
-        script.textContent =
-            code;
+        script.textContent = code;
     }
 
 
@@ -445,9 +261,7 @@
        Remove <base>
     -------------------------------- */
 
-    for (const base of
-        doc.querySelectorAll("base")) {
-
+    for (const base of doc.querySelectorAll("base")) {
         base.remove();
     }
 
@@ -456,15 +270,9 @@
        Serialize
     -------------------------------- */
 
-    const output =
-        "<!DOCTYPE html>\n" +
-        doc.documentElement.outerHTML;
+    const output = "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
 
-    console.log(
-        "Rewritten TikTok:",
-        output.length,
-        "bytes"
-    );
+    console.log("Rewritten FOSS:", output.length, "bytes");
 
 
     /* --------------------------------
@@ -472,9 +280,7 @@
     -------------------------------- */
 
     document.open();
-
     document.write(output);
-
     document.close();
 
 })();
